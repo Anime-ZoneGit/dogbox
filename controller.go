@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/Fekinox/dogbox-main/db"
+	db "github.com/Fekinox/dogbox-main/db/sqlc"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/sqids/sqids-go"
 )
 
 const DATA_DIR = "data"
@@ -20,12 +22,17 @@ const DATA_DIR = "data"
 type DogboxController struct {
 	db *db.Queries
 	conn *pgx.Conn
+	sqids *sqids.Sqids
 
 	pwd string
 }
 
 func (dc *DogboxController) getImagePath(name string) string {
 	return filepath.Join(dc.pwd, DATA_DIR, "images", name)
+}
+
+func (dc *DogboxController) genDeletionKey(id int64) (string, error) {
+	return dc.sqids.Encode([]uint64{uint64(id)})
 }
 
 func CreateController(connString string) (*DogboxController, error) {
@@ -41,10 +48,21 @@ func CreateController(connString string) (*DogboxController, error) {
 		return nil, err
 	}
 
+	s, err := sqids.New(
+		sqids.Options{
+			MinLength: 10,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DogboxController{
 		db: q,
 		conn: conn,
 		pwd: wd,
+
+		sqids: s,
 	}, nil
 }
 
@@ -59,9 +77,10 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 		return
 	}
 	name := filename.Name
-	ident := strings.TrimSuffix(name, filepath.Ext(name))
+	sq := strings.TrimSuffix(name, filepath.Ext(name))
+	id := int64(dc.sqids.Decode(sq)[0])
 
-	p, err := dc.db.GetFile(c.Request.Context(), ident)
+	p, err := dc.db.GetPost(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"msg": err.Error()})
 	}
@@ -72,51 +91,97 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 }
 
 func (dc *DogboxController) CreateFile(c *gin.Context) {
+	fmt.Println(c.ContentType())
 	data, err := c.FormFile("data")
 	if err != nil {
 		c.JSON(400, gin.H{"msg": err.Error()})
 		return
 	}
 
-	_ = data
-
-	ts := time.Now()
-
-	ident := uuid.NewString()
-	del := uuid.NewString()
-	ext := filepath.Ext(data.Filename)
-	filename := ident + ext
-
-	imPath := dc.getImagePath(filename)
-	err = os.MkdirAll(filepath.Dir(imPath), 0755)
+	tx, err := dc.conn.Begin(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		c.JSON(500, gin.H{"msg": err.Error()})
 		return
 	}
+	defer tx.Rollback(c.Request.Context())
+	qtx := dc.db.WithTx(tx)
 
-	err = c.SaveUploadedFile(data, imPath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-		return
-	}
-
-	i, err := dc.db.UploadFile(c.Request.Context(), db.UploadFileParams{
-		Filename: filename,
-		Identifier: ident,
-		Uploaddate: pgtype.Timestamptz{
-			Time: ts,
-			InfinityModifier: pgtype.Finite,
-			Valid: true,
-		},
-		Deletetoken: del,
+	i, err := qtx.CreatePost(c.Request.Context(), db.CreatePostParams{
+		Filename: "newfile",
+		DeletionKey: "delkey",
+		Md5: "md5",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 		return
 	}
 
+	ident, err := dc.sqids.Encode([]uint64{uint64(i.ID)})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	ext := filepath.Ext(data.Filename)
+	filename := ident + ext
+
+	imPath := dc.getImagePath(filename)
+
+	err = os.MkdirAll(filepath.Dir(imPath), 0755)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	srcFile, err := data.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	dstFile, err := os.Create(imPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	hasher := md5.New()
+
+	w := io.MultiWriter(
+		dstFile,
+		hasher,
+	)
+
+	if _, err := io.Copy(w, srcFile); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	md5Hash := hex.EncodeToString(hasher.Sum(nil))
+	dKey, err := dc.genDeletionKey(i.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	final, err := qtx.UpdatePost(c.Request.Context(), db.UpdatePostParams{
+		Filename: &filename,
+		DeletionKey: &dKey,
+		Md5: &md5Hash,
+		ID: i.ID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
+	if err = tx.Commit(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+		return
+	}
+
 	c.JSON(201, gin.H{
-		"message": i,
+		"message": final,
 	})
 }
 
