@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
 
@@ -21,11 +27,33 @@ func main() {
 	}
 	defer dc.Close()
 
-	r := gin.Default()
+	dc.MountHandlers()
 
-	r.GET("/:name", dc.GetFile)
-	r.POST("/", dc.CreateFile)
-	r.DELETE("/:name", dc.DeleteFile)
+	addr := fmt.Sprintf(":%s", config.Port)
 
-	r.Run() // listen and serve on 0.0.0.0:8080
+	srv := &http.Server{
+		Addr: addr,
+		Handler: dc.Router(),
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with a
+	// timeout of 5 seconds
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	fmt.Println("Shutting down...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Forced to shutdown: ", err)
+	}
+
+	fmt.Println("Server exiting")
 }

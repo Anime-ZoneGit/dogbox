@@ -22,6 +22,7 @@ const DATA_DIR = "data"
 type DogboxController struct {
 	db *db.Queries
 	cfg Config
+	router *gin.Engine
 	conn *pgx.Conn
 	sqids *sqids.Sqids
 
@@ -37,6 +38,14 @@ func (dc *DogboxController) genDeletionKey(id int64) (string, error) {
 }
 
 func CreateController(cfg Config) (*DogboxController, error) {
+	var engine *gin.Engine
+	if cfg.Environment == "test" || cfg.Environment == "release" {
+		gin.SetMode(gin.ReleaseMode)
+		engine = gin.New()
+	} else {
+		engine = gin.Default()
+	}
+
 	conn, err := pgx.Connect(context.Background(), cfg.DBUrl)
 	if err != nil {
 		return nil, err
@@ -62,10 +71,28 @@ func CreateController(cfg Config) (*DogboxController, error) {
 		db: q,
 		cfg: cfg,
 		conn: conn,
+		router: engine,
 		pwd: wd,
 
 		sqids: s,
 	}, nil
+}
+
+func (dc *DogboxController) MountHandlers() {
+	api := dc.router.Group("/api")
+
+	posts := api.Group("/posts")
+	posts.GET(":name", dc.GetFile)
+	posts.POST("", dc.CreateFile)
+	posts.DELETE(":name", dc.DeleteFile)
+}
+
+func (dc *DogboxController) Start(addr string) error {
+	return dc.router.Run(addr)
+}
+
+func (dc *DogboxController) Router() *gin.Engine {
+	return dc.router
 }
 
 func (dc *DogboxController) Close() error {
