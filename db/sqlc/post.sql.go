@@ -11,27 +11,27 @@ import (
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    filename, deletion_key, md5
+    filename, deletion_key, hash
 ) VALUES (
     $1, $2, $3
 )
-RETURNING id, filename, deletion_key, md5, created_at, updated_at
+RETURNING id, filename, deletion_key, hash, created_at, updated_at
 `
 
 type CreatePostParams struct {
 	Filename    string `json:"filename"`
 	DeletionKey string `json:"deletion_key"`
-	Md5         string `json:"md5"`
+	Hash        string `json:"hash"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (*Post, error) {
-	row := q.db.QueryRow(ctx, createPost, arg.Filename, arg.DeletionKey, arg.Md5)
+	row := q.db.QueryRow(ctx, createPost, arg.Filename, arg.DeletionKey, arg.Hash)
 	var i Post
 	err := row.Scan(
 		&i.ID,
 		&i.Filename,
 		&i.DeletionKey,
-		&i.Md5,
+		&i.Hash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -49,7 +49,7 @@ func (q *Queries) DeletePost(ctx context.Context, id int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, filename, deletion_key, md5, created_at, updated_at FROM posts
+SELECT id, filename, deletion_key, hash, created_at, updated_at FROM posts
 WHERE id = $1 LIMIT 1
 `
 
@@ -60,7 +60,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (*Post, error) {
 		&i.ID,
 		&i.Filename,
 		&i.DeletionKey,
-		&i.Md5,
+		&i.Hash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -71,16 +71,16 @@ const updatePost = `-- name: UpdatePost :one
 UPDATE posts
 SET filename = coalesce($1, filename),
     deletion_key = coalesce($2, deletion_key),
-    md5 = coalesce($3, md5),
+    hash = coalesce($3, hash),
     updated_at = now()
 WHERE id = $4
-RETURNING id, filename, deletion_key, md5, created_at, updated_at
+RETURNING id, filename, deletion_key, hash, created_at, updated_at
 `
 
 type UpdatePostParams struct {
 	Filename    *string `json:"filename"`
 	DeletionKey *string `json:"deletion_key"`
-	Md5         *string `json:"md5"`
+	Hash        *string `json:"hash"`
 	ID          int64   `json:"id"`
 }
 
@@ -88,7 +88,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (*Post, 
 	row := q.db.QueryRow(ctx, updatePost,
 		arg.Filename,
 		arg.DeletionKey,
-		arg.Md5,
+		arg.Hash,
 		arg.ID,
 	)
 	var i Post
@@ -96,7 +96,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (*Post, 
 		&i.ID,
 		&i.Filename,
 		&i.DeletionKey,
-		&i.Md5,
+		&i.Hash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

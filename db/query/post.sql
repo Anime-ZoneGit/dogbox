@@ -4,7 +4,7 @@ WHERE id = $1 LIMIT 1;
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    filename, deletion_key, md5
+    filename, deletion_key, hash
 ) VALUES (
     $1, $2, $3
 )
@@ -14,7 +14,7 @@ RETURNING *;
 UPDATE posts
 SET filename = coalesce(sqlc.narg('filename'), filename),
     deletion_key = coalesce(sqlc.narg('deletion_key'), deletion_key),
-    md5 = coalesce(sqlc.narg('md5'), md5),
+    hash = coalesce(sqlc.narg('hash'), hash),
     updated_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;

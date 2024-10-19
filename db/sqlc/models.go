@@ -12,7 +12,7 @@ type Post struct {
 	ID          int64              `json:"id"`
 	Filename    string             `json:"filename"`
 	DeletionKey string             `json:"deletion_key"`
-	Md5         string             `json:"md5"`
+	Hash        string             `json:"hash"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

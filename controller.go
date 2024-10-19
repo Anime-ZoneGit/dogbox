@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -109,7 +110,7 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 	i, err := qtx.CreatePost(c.Request.Context(), db.CreatePostParams{
 		Filename: "newfile",
 		DeletionKey: "delkey",
-		Md5: "md5",
+		Hash: "hash",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
@@ -145,7 +146,7 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 		return
 	}
 
-	hasher := md5.New()
+	hasher := sha256.New()
 
 	w := io.MultiWriter(
 		dstFile,
@@ -157,7 +158,7 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 		return
 	}
 
-	md5Hash := hex.EncodeToString(hasher.Sum(nil))
+	hashString := hex.EncodeToString(hasher.Sum(nil))
 	dKey, err := dc.genDeletionKey(i.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
@@ -167,7 +168,7 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 	final, err := qtx.UpdatePost(c.Request.Context(), db.UpdatePostParams{
 		Filename: &filename,
 		DeletionKey: &dKey,
-		Md5: &md5Hash,
+		Hash: &hashString,
 		ID: i.ID,
 	})
 	if err != nil {
