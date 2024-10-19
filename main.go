@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
 type Filename struct {
@@ -11,9 +12,10 @@ type Filename struct {
 }
 
 func main() {
-	connString := "postgres://postgres:postgres@localhost:5432/postgres"
+	v := viper.New()
+	config := LoadConfig(v, ".env")
 
-	dc, err := CreateController(connString)
+	dc, err := CreateController(config)
 	if err != nil {
 		log.Fatal(err)
 	}

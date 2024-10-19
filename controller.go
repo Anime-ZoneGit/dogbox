@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -22,6 +21,7 @@ const DATA_DIR = "data"
 
 type DogboxController struct {
 	db *db.Queries
+	cfg Config
 	conn *pgx.Conn
 	sqids *sqids.Sqids
 
@@ -36,8 +36,8 @@ func (dc *DogboxController) genDeletionKey(id int64) (string, error) {
 	return dc.sqids.Encode([]uint64{uint64(id)})
 }
 
-func CreateController(connString string) (*DogboxController, error) {
-	conn, err := pgx.Connect(context.Background(), connString)
+func CreateController(cfg Config) (*DogboxController, error) {
+	conn, err := pgx.Connect(context.Background(), cfg.DBUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +60,7 @@ func CreateController(connString string) (*DogboxController, error) {
 
 	return &DogboxController{
 		db: q,
+		cfg: cfg,
 		conn: conn,
 		pwd: wd,
 
