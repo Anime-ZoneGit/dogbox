@@ -29,6 +29,10 @@ type DogboxController struct {
 	pwd string
 }
 
+type Filename struct {
+	Name string `uri:"name" binding:"required"`
+}
+
 func (dc *DogboxController) getImagePath(name string) string {
 	return filepath.Join(dc.pwd, DATA_DIR, "images", name)
 }
@@ -82,9 +86,25 @@ func (dc *DogboxController) MountHandlers() {
 	api := dc.router.Group("/api")
 
 	posts := api.Group("/posts")
-	posts.GET(":name", dc.GetFile)
-	posts.POST("", ApiKeyMiddleware(&dc.cfg), dc.CreateFile)
-	posts.DELETE(":name", dc.DeleteFile)
+	// posts.Use(Timeout(60 * time.Second))
+
+	posts.GET(
+		":name",
+		RateLimiter(100, 25),
+		dc.GetFile,
+	)
+	posts.POST(
+		"",
+		ApiKeyMiddleware(&dc.cfg),
+		RateLimiter(20, 5),
+		dc.CreateFile,
+	)
+	posts.DELETE(
+		":name",
+		ApiKeyMiddleware(&dc.cfg),
+		RateLimiter(20, 5),
+		dc.DeleteFile,
+	)
 }
 
 func (dc *DogboxController) Start(addr string) error {

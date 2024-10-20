@@ -7,6 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/spf13/viper v1.19.0
 	github.com/sqids/sqids-go v0.4.1
+	golang.org/x/time v0.5.0
 )
 
 require (

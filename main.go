@@ -13,10 +13,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Filename struct {
-	Name string `uri:"name" binding:"required"`
-}
-
 func main() {
 	v := viper.New()
 	config := LoadConfig(v, ".env")
