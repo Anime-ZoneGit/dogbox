@@ -1,2 +1,1 @@
-implement sql migrations
-implement filesystem usage
+implement dockerization of this package

@@ -17,8 +17,6 @@ import (
 	"github.com/sqids/sqids-go"
 )
 
-const DATA_DIR = "_data"
-
 type DogboxController struct {
 	db     *db.Queries
 	cfg    Config
@@ -34,7 +32,7 @@ type Filename struct {
 }
 
 func (dc *DogboxController) getImagePath(name string) string {
-	return filepath.Join(dc.pwd, DATA_DIR, "images", name)
+	return filepath.Join(dc.cfg.DogboxDataDir, "images", name)
 }
 
 func (dc *DogboxController) genDeletionKey(id int64) (string, error) {
@@ -187,12 +185,14 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 		return
 	}
+	defer srcFile.Close()
 
 	dstFile, err := os.Create(imPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 		return
 	}
+	defer dstFile.Close()
 
 	hasher := sha256.New()
 
