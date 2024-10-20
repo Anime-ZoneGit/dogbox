@@ -32,12 +32,13 @@ func main() {
 	addr := fmt.Sprintf(":%s", config.Port)
 
 	srv := &http.Server{
-		Addr: addr,
+		Addr:    addr,
 		Handler: dc.Router(),
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil &&
+			err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()

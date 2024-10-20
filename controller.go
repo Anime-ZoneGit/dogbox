@@ -17,14 +17,14 @@ import (
 	"github.com/sqids/sqids-go"
 )
 
-const DATA_DIR = "data"
+const DATA_DIR = "_data"
 
 type DogboxController struct {
-	db *db.Queries
-	cfg Config
+	db     *db.Queries
+	cfg    Config
 	router *gin.Engine
-	conn *pgx.Conn
-	sqids *sqids.Sqids
+	conn   *pgx.Conn
+	sqids  *sqids.Sqids
 
 	pwd string
 }
@@ -68,11 +68,11 @@ func CreateController(cfg Config) (*DogboxController, error) {
 	}
 
 	return &DogboxController{
-		db: q,
-		cfg: cfg,
-		conn: conn,
+		db:     q,
+		cfg:    cfg,
+		conn:   conn,
 		router: engine,
-		pwd: wd,
+		pwd:    wd,
 
 		sqids: s,
 	}, nil
@@ -83,7 +83,7 @@ func (dc *DogboxController) MountHandlers() {
 
 	posts := api.Group("/posts")
 	posts.GET(":name", dc.GetFile)
-	posts.POST("", dc.CreateFile)
+	posts.POST("", ApiKeyMiddleware(&dc.cfg), dc.CreateFile)
 	posts.DELETE(":name", dc.DeleteFile)
 }
 
@@ -115,7 +115,7 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 	}
 
 	imPath := dc.getImagePath(p.Filename)
-	
+
 	c.File(imPath)
 }
 
@@ -136,9 +136,9 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 	qtx := dc.db.WithTx(tx)
 
 	i, err := qtx.CreatePost(c.Request.Context(), db.CreatePostParams{
-		Filename: "newfile",
+		Filename:    "newfile",
 		DeletionKey: "delkey",
-		Hash: "hash",
+		Hash:        "hash",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
@@ -194,10 +194,10 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 	}
 
 	final, err := qtx.UpdatePost(c.Request.Context(), db.UpdatePostParams{
-		Filename: &filename,
+		Filename:    &filename,
 		DeletionKey: &dKey,
-		Hash: &hashString,
-		ID: i.ID,
+		Hash:        &hashString,
+		ID:          i.ID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})

@@ -1,4 +1,4 @@
 _postgres_data/
-data/
+_data/
 SPEC.md
 .env
