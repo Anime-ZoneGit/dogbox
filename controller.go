@@ -57,7 +57,7 @@ func CreateController(cfg Config) (*DogboxController, error) {
 		engine = gin.Default()
 	}
 
-	conn, err := pgx.Connect(context.Background(), cfg.DBUrl)
+	conn, err := pgx.Connect(context.Background(), cfg.GetDBUrl())
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +223,7 @@ func (dc *DogboxController) uploadToStore(
 	data *multipart.FileHeader,
 	st store.Store,
 ) (*db.Post, error) {
+	dataFilename := filepath.Base(data.Filename)
 	tx, err := dc.conn.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -244,7 +245,7 @@ func (dc *DogboxController) uploadToStore(
 		return nil, err
 	}
 
-	ext := filepath.Ext(data.Filename)
+	ext := filepath.Ext(dataFilename)
 	filename := ident + ext
 
 	imPath := dc.getImagePath(filename)

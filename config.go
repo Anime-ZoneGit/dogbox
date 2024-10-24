@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"log"
 
 	"github.com/spf13/viper"
@@ -12,12 +13,30 @@ type Config struct {
 	Host        string `mapstructure:"HOST"`
 	Port        string `mapstructure:"PORT"`
 
-	DBUrl string `mapstructure:"DB_URL"`
+	DBPassword string `mapstructure:"DB_PASSWORD"`
+	DBUsername string `mapstructure:"DB_USERNAME"`
+	DBHost     string `mapstructure:"DB_HOST"`
+	DBPort     string `mapstructure:"DB_PORT"`
+	DBName     string `mapstructure:"DB_NAME"`
+	DBOptions  string `mapstructure:"DB_OPTIONS"`
+	DBUrl      string `mapstructure:"DB_URL"`
 
 	DogboxDataDir string `mapstructure:"DOGBOX_DATA_DIR"`
 	DogboxAPIKey  string `mapstructure:"DOGBOX_API_KEY"`
 
 	DecodedAPIKey []byte
+}
+
+func (c *Config) GetDBUrl() string {
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?%s",
+		c.DBUsername,
+		c.DBPassword,
+		c.DBHost,
+		c.DBPort,
+		c.DBName,
+		c.DBOptions,
+	)
 }
 
 func LoadConfig(v *viper.Viper, path string) (config Config) {

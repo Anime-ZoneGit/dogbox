@@ -1,3 +1,0 @@
-APP_NAME=dogbox-main
-DB_URL="postgres://postgres:postgres@localhost:5432/postgres"
-DOGBOX_DATA_DIR="./_data"
