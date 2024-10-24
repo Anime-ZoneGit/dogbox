@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
@@ -14,6 +13,13 @@ import (
 )
 
 const MAX_API_KEY_LENGTH = 64
+
+var (
+	MissingAPIKeyError         = errors.New("Could not find API key")
+	InvalidAuthenticationError = errors.New("Invalid authentication")
+	RateLimitExceededError     = errors.New("Rate limit exceeded")
+	TimeoutError               = errors.New("Timeout")
+)
 
 // Extracts the token from the given header in the request.
 func extractToken(c *gin.Context, header string) (string, error) {
@@ -43,24 +49,20 @@ func verifyApiKey(cfg *Config, s string) bool {
 	return subtle.ConstantTimeCompare(cfg.DecodedAPIKey, key) == 1
 }
 
+// Rejects all requests that do not have a valid API key.
 func ApiKeyMiddleware(cfg *Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key, err := extractToken(c, "Authorization")
 		if err != nil {
-			c.JSON(
-				http.StatusUnauthorized,
-				gin.H{"msg": "Could not find API key"},
-			)
-			c.Abort()
+			c.AbortWithError(http.StatusUnauthorized, MissingAPIKeyError)
 			return
 		}
 
 		if !verifyApiKey(cfg, key) {
-			c.JSON(
+			c.AbortWithError(
 				http.StatusUnauthorized,
-				gin.H{"msg": "Invalid authentication"},
+				InvalidAuthenticationError,
 			)
-			c.Abort()
 			return
 		}
 
@@ -68,12 +70,13 @@ func ApiKeyMiddleware(cfg *Config) gin.HandlerFunc {
 	}
 }
 
+// Applies a rate limiter to the http handler. At most r events will be sent to
+// the handler per second, and it also permits bursts of up to b events.
 func RateLimiter(r rate.Limit, b int) gin.HandlerFunc {
 	limiter := rate.NewLimiter(r, b)
 	return func(c *gin.Context) {
 		if !limiter.Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{"msg": "Rate Limit Exceeded"})
-			c.Abort()
+			c.AbortWithError(http.StatusTooManyRequests, RateLimitExceededError)
 			return
 		} else {
 			c.Next()
@@ -81,29 +84,36 @@ func RateLimiter(r rate.Limit, b int) gin.HandlerFunc {
 	}
 }
 
-// FIXME: broken
-func Timeout(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
-		defer cancel()
-
-		defer func() {
-			if ctx.Err() == context.DeadlineExceeded {
-				c.JSON(http.StatusGatewayTimeout, gin.H{"msg": "Timeout"})
-				c.Abort()
-			}
-
-			cancel()
-		}()
-
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
-}
-
+// Adds an artificial delay to the event handler.
 func Delay(timeout time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		time.Sleep(timeout)
 		c.Next()
+	}
+}
+
+// Handles all errors raised by event handlers and middleware.
+func ErrorHandler(cfg *Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		if len(c.Errors) == 0 {
+			return
+		}
+
+		errList := make([]string, len(c.Errors))
+
+		for i, ginErr := range c.Errors {
+			// fmt.Println(ginErr)
+			errList[i] = ginErr.Error()
+		}
+
+		// Only show errors if either we are in dev mode or if the error is not
+		// an internal error (error code >= 500)
+		if cfg.Environment == "dev" || c.Writer.Status() < 500 {
+			c.JSON(-1, gin.H{"errors": errList})
+		} else {
+			c.JSON(-1, gin.H{"errors": http.StatusText(c.Writer.Status())})
+		}
 	}
 }

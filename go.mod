@@ -4,9 +4,11 @@ go 1.23.2
 
 require (
 	github.com/gin-gonic/gin v1.10.0
+	github.com/google/uuid v1.4.0
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/spf13/viper v1.19.0
 	github.com/sqids/sqids-go v0.4.1
+	golang.org/x/net v0.30.0
 	golang.org/x/time v0.5.0
 )
 
@@ -49,7 +51,6 @@ require (
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
