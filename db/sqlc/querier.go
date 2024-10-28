@@ -11,7 +11,9 @@ import (
 type Querier interface {
 	CreatePost(ctx context.Context, arg CreatePostParams) (*Post, error)
 	DeletePost(ctx context.Context, id int64) error
+	GetAllPosts(ctx context.Context, arg GetAllPostsParams) ([]*Post, error)
 	GetPost(ctx context.Context, id int64) (*Post, error)
+	GetPostByFilename(ctx context.Context, filename *string) (*Post, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (*Post, error)
 }
 

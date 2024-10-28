@@ -1,0 +1,12 @@
+BEGIN;
+
+DELETE FROM posts
+WHERE
+  status IS NULL;
+
+ALTER TABLE IF EXISTS posts
+ALTER COLUMN status
+SET
+  NOT NULL;
+
+COMMIT;

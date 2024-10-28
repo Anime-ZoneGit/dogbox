@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	db "github.com/Fekinox/dogbox-main/db/sqlc"
@@ -100,6 +101,12 @@ func (dc *DogboxController) MountHandlers() {
 	posts.Use(ErrorHandler(&dc.cfg))
 
 	posts.GET(
+		"",
+		ApiKeyMiddleware(&dc.cfg),
+		RateLimiter(100, 25),
+		dc.GetAllFiles,
+	)
+	posts.GET(
 		":name",
 		RateLimiter(100, 25),
 		dc.GetFile,
@@ -132,17 +139,20 @@ func (dc *DogboxController) Close() error {
 
 func (dc *DogboxController) GetFile(c *gin.Context) {
 	name := c.Param("name")
-	sq := dc.sqids.Decode(strings.TrimSuffix(name, filepath.Ext(name)))
-	if len(sq) == 0 {
-		c.AbortWithError(http.StatusBadRequest, BadRequestError)
-		return
-	}
-	id := int64(sq[0])
 
-	p, err := dc.db.GetPost(c.Request.Context(), id)
+	p, err := dc.db.GetPostByFilename(c.Request.Context(), &name)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, NotFoundError(name))
 		return
+	}
+
+	if p.Status != db.PostStatusOk {
+		c.AbortWithError(http.StatusNotFound, NotFoundError(name))
+		return
+	}
+
+	if p.Filename == nil || p.Hash == nil {
+		c.AbortWithError(http.StatusInternalServerError, NotFoundError(name))
 	}
 
 	modTimeMd5 := md5.Sum([]byte(p.UpdatedAt.Time.String()))
@@ -158,7 +168,7 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 		}
 	}
 
-	imPath := dc.getImagePath(p.Filename)
+	imPath := dc.getImagePath(*p.Filename)
 
 	reader, err := dc.store.Retrieve(imPath)
 	if err != nil {
@@ -170,7 +180,7 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 		dc.cfg.DogboxDataDir,
 		"images",
 		"tmp",
-		p.Filename,
+		*p.Filename,
 	))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -187,10 +197,35 @@ func (dc *DogboxController) GetFile(c *gin.Context) {
 	http.ServeContent(
 		c.Writer,
 		c.Request,
-		p.Filename,
+		*p.Filename,
 		p.UpdatedAt.Time,
 		tmpFile,
 	)
+}
+
+func (dc *DogboxController) GetAllFiles(c *gin.Context) {
+	pageNum := 1
+
+	page := c.Query("page")
+	if page != "" {
+		num, err := strconv.Atoi(page)
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, errors.New("Invalid page"))
+			return
+		}
+		pageNum = num
+	}
+
+	data, err := dc.db.GetAllPosts(c.Request.Context(), db.GetAllPostsParams{
+		PageSize: int64(dc.cfg.PageSize),
+		PageNum:  int64(pageNum - 1),
+	})
+
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	c.JSON(http.StatusOK, data)
 }
 
 func (dc *DogboxController) CreateFile(c *gin.Context) {
@@ -202,7 +237,8 @@ func (dc *DogboxController) CreateFile(c *gin.Context) {
 
 	final, err := dc.uploadToStore(c.Request.Context(), data, dc.store)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, BadRequestError)
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -232,15 +268,18 @@ func (dc *DogboxController) uploadToStore(
 	qtx := dc.db.WithTx(tx)
 
 	i, err := qtx.CreatePost(ctx, db.CreatePostParams{
-		Filename:    "newfile",
-		DeletionKey: "delkey",
-		Hash:        "hash",
+		Filename: nil,
+		Delkey:   nil,
+		Hash:     nil,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	ident, err := dc.sqids.Encode([]uint64{uint64(i.ID)})
+	ident, err := dc.sqids.Encode([]uint64{
+		uint64(i.ID),
+		uint64(i.CreatedAt.Time.Unix()),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +319,7 @@ func (dc *DogboxController) uploadToStore(
 		Filename:    &filename,
 		DeletionKey: &dKey,
 		Hash:        &hashString,
+		Status:      db.NullPostStatus{PostStatus: db.PostStatusOk, Valid: true},
 		ID:          i.ID,
 	})
 	if err != nil {

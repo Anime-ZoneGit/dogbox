@@ -24,6 +24,8 @@ type Config struct {
 	DogboxDataDir string `mapstructure:"DOGBOX_DATA_DIR"`
 	DogboxAPIKey  string `mapstructure:"DOGBOX_API_KEY"`
 
+	PageSize int `mapstructure:"PAGE_SIZE"`
+
 	DecodedAPIKey []byte
 }
 
