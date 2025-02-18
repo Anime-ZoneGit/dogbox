@@ -1,7 +1,7 @@
 # Dogbox
 
 Clone of Catbox for instructive purposes.
-
+~
 * Uses Docker to spin up a postgres server and nginx reverse proxy
 * Options to store files within a filesystem or remote storage
 * Returns information about the images like creation and modification date
